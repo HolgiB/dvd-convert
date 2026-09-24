@@ -68,35 +68,21 @@ und erzeugt ein brennbares ISO — für Player, die nur echte DVD-Video können
 | Audio | AC3 (bevorzugt), LPCM, MP2 |
 | GOP | ≤ 36 Frames (hier 15) |
 
-## Warum das Encoding CPU-lastig ist (CRITICAL)
+## Bekannte Stolpersteine
 
-**Die RTX 3060 (CUDA/NVENC) kann MPEG-2 NICHT encodieren.** NVIDIAs
-NVENC beherrscht H.264, HEVC, AV1 — **aber kein MPEG-2**. Es existiert
-schlicht kein `mpeg2_nvenc`. Da DVD-Video zwingend MPEG-2 verlangt, ist das
-Encoding ein **reiner CPU-Job**. Das Skript nutzt deshalb bewusst die
-Software-Encoder. Eine GPU hilft hier **nicht**.
-
-**Wo die GPU / ein anderer Weg wirklich hilft:**
-
-| Ziel | Empfohlener Weg | CUDA? |
-|------|-----------------|-------|
-| **DVD-Video (dieses Skript)** | CPU-MPEG-2 | ❌ hinsichtlich Codec |
-| **MP4/H.264 für USB/Mediaplayer** | `h264_nvenc` | ✅ **riesige Beschleunigung** (~5-10×) |
-
-Wenn das Zielgerät **USB** kann (viele DVD-Player), ist ein **H.264-MP4**
-statt DVD teils praktischer: kein doppeltes Re-Encoding (BluRay ist schon
-H.264 → nur Remux/Scale, quasi verlustarm) und die 3060 wird nützlich.
-Prüfe vorher, ob der Player DivX/MP4 von USB abspielt.
-
-> „Dual-Pass"-Hinweis: Zwei Encodierungs-Durchläufe (Analyse + Verstärkung)
-> verbessern die Qualität merklich gegenüber Single-Pass bei gleicher Bitrate —
-> unabhängig von der GPU-Frage kosten sie nur CPU-Zeit.
-
-## Fehlerbehandlung
-
+- **`ERR: no video format specified for VMGM`** beim Authoring: dvdauthor
+  0.7.2 (Ubuntu baut ohne kompiliertes `DEFAULT_VIDEO_FORMAT`) erzeugt das
+  `VIDEO_TS.IFO`/`BUP` (Domain-Schlüssel) sonst nicht. Lösen: `<vmgm/>`-Element
+  in der XML **und** die Umgebungsvariable `VIDEO_FORMAT=pal|ntsc` beim
+  dvdauthor-Aufruf setzen (das Standard-Format). Ohne das ist das ISO nicht
+  abspielbar (genisoimage meldet "invalid contents").
+- **`writing data`-Abbruch** beim Authoring mit langem/leerzeichen-haltigem
+  Pfad: die `title.mpg` und `batch.xml` werden in ein kurzes, sauberes
+  Zwischenverzeichnis gelegt (dvdauthor löst `<vob file>` relativ zum
+  Ausgabe-Ort auf).
 - **`Fehlt: wodim`** → `sudo apt install wodim` (nur für `--burn`)
-- **ISO zu groß** → niedrigere Bitrate wählen (`--format dvd9` oder Hand-Dauer)
-- **Player spult nicht** → `-g 15`/GOP ist korrekt; prüfen ob P<->N richtig
+- **ISO zu groß** → niedrigere Bitrate wählen (`--format dvd9`)
+- **Player spult nicht** → `-g 15`/GOP ist korrekt; prüfen ob PAL/NTSC stimmt
 
 ## Lizenz / Hinweis
 
