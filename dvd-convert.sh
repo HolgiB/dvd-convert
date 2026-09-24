@@ -73,7 +73,7 @@ target_br=$(( video_budget / dur / 1000 ))
 (( target_br < 2500 )) && target_br=2500
 echo "Ziel: dvd=$FORMAT Nutzbar=$((TARGET_BYTES/1000000))MB Dauer=${dur}s Video-Bitrate=${target_br}k"
 
-# ---------- PAL/NTSC ----------
+# ---------- PAL/NTSC (für ffmpeg-Ziel) ----------
 if [[ "$STD" == "pal" ]]; then
   TARGET="-target pal-dvd"
 else
@@ -116,10 +116,35 @@ ffmpeg -y -loglevel error -stats \
   "$OUTPUT.mpg"
 
 # ---------- DVD-Authoring (VIDEO_TS, ohne Menü) ----------
+# Fix (findet den Bug seit dvdauthor 0.7.2/Ubuntu ohne kompiliertes Default):
+#   * <vmgm/>-Element sorgt dafür, dass VIDEO_TS.IFO/BUP (Domain-Schlüssel) erzeugt wird.
+#   * dvdauthor 0.7.2 (Ubuntu) braucht das Videoformat GLOBAL über die
+#     UMGEBUNGSVARIABLE VIDEO_FORMAT=pal|ntsc -- sonst: "no video format for VMGM".
+#   * dvdauthor löst <vob file> relativ zum AUSGABE-Ort auf; title.mpg direkt in
+#     $OUTPUT.dvd stellen (kurzer, leer-raum-freier Pfad -> keine "writing data"-Abbrüche).
 echo "[3/4] DVD-Authoring (VIDEO_TS)..."
 rm -rf "$OUTPUT.dvd" && mkdir -p "$OUTPUT.dvd"
-dvdauthor -o "$OUTPUT.dvd" -t "$OUTPUT.mpg"
-dvdauthor -o "$OUTPUT.dvd" -T
+cp "$OUTPUT.mpg" "$OUTPUT.dvd/title.mpg"
+cat > "$OUTPUT.dvd/batch.xml" <<EOF
+<?xml version="1.0"?>
+<dvdauthor>
+  <vmgm/>
+  <titleset>
+    <titles>
+      <pgc>
+        <vob file="title.mpg"/>
+      </pgc>
+    </titles>
+  </titleset>
+</dvdauthor>
+EOF
+( cd "$OUTPUT.dvd" && VIDEO_FORMAT="$STD" dvdauthor -o . -x batch.xml )
+rv=$?
+rm -f "$OUTPUT.dvd/batch.xml" "$OUTPUT.dvd/title.mpg"
+if [[ $rv -ne 0 ]]; then
+  echo "FEHLER: dvdauthor schlug fehl (Code $rv). Abbruch." >&2
+  exit $rv
+fi
 
 # ---------- ISO ----------
 echo "[4/4] ISO bauen..."
